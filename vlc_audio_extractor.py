@@ -140,7 +140,7 @@ class MainWindow(wx.Frame):
 
 def main():
     app = wx.App(False)
-    frame = MainWindow(None, title='VLC Audio Extraction', size=(1200, 200))
+    frame = MainWindow(None, title='VLC Audio Extractor', size=(1200, 200))
     app.MainLoop()
 
 
