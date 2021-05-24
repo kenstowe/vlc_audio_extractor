@@ -76,7 +76,7 @@ class MainWindow(wx.Frame):
 
         # Stage four, start
         start_button = wx.Button(panel, label="Start", size=(90, 28))
-        sizer.Add(start_button, pos=(3, 23))
+        sizer.Add(start_button, pos=(3, 23), flag=wx.ALIGN_CENTRE)
         start_button.Bind(wx.EVT_BUTTON, self.start_transcode)
 
         panel.SetSizerAndFit(sizer)
