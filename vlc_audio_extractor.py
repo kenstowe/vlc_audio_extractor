@@ -3,6 +3,20 @@ import subprocess
 import wx
 
 
+def find_vlc():
+    pf_dir = os.environ["ProgramFiles"]  # The Program File directory (64bit)
+    pf86_dir = os.environ["ProgramFiles(x86)"]  # The Program File directory (32bit)
+    vlc_root = r'\VideoLAN\VLC\vlc.exe'
+
+    if os.path.exists(f'{pf_dir}{vlc_root}'):
+        return f'{pf_dir}{vlc_root}'
+    elif os.path.exists(f'{pf86_dir}{vlc_root}'):
+        return f'{pf86_dir}{vlc_root}'
+    else:
+        print("VLC not found")
+        # TODO: setup a file picker to get user input for the location of the vlc.exe
+
+
 class Arrow(wx.Panel):
     def __init__(self, *args, **kwargs):
         wx.Panel.__init__(self, *args, **kwargs, size=(110, 20))
@@ -29,11 +43,6 @@ class MainWindow(wx.Frame):
         self.output_dir = ''
         self.file_name = ''
 
-        self.init_ui()
-        self.Centre()
-        self.Show(True)
-
-    def init_ui(self):
         panel = wx.Panel(self)
         sizer = wx.GridBagSizer(0, 0)
         self.SetBackgroundColour('white')
@@ -47,7 +56,6 @@ class MainWindow(wx.Frame):
 
         files_button = wx.Button(panel, label="Browse", size=(80, 23))
         sizer.Add(files_button, pos=(3, 6), flag=wx.ALIGN_CENTRE)
-        files_button.Bind(wx.EVT_BUTTON, self.get_files)
 
         arrow1 = Arrow(self, wx.ID_ANY)
         sizer.Add(arrow1, pos=(3, 7), flag=wx.LEFT | wx.ALIGN_CENTRE, border=30)
@@ -58,7 +66,6 @@ class MainWindow(wx.Frame):
 
         self.dir_ctrl = wx.DirPickerCtrl(panel, message="Select output folder")
         sizer.Add(self.dir_ctrl, pos=(3, 8), span=(1, 5), flag=wx.EXPAND | wx.ALL, border=5)
-        self.dir_ctrl.Bind(wx.EVT_DIRPICKER_CHANGED, self.set_dir)
 
         arrow2 = Arrow(self, wx.ID_ANY)
         sizer.Add(arrow2, pos=(3, 14), flag=wx.LEFT | wx.ALIGN_CENTRE, border=15)
@@ -69,17 +76,24 @@ class MainWindow(wx.Frame):
 
         self.name_ctrl = wx.TextCtrl(panel)
         sizer.Add(self.name_ctrl, pos=(3, 15), span=(1, 6), flag=wx.EXPAND | wx.ALL, border=5)
-        self.name_ctrl.Bind(wx.EVT_TEXT, self.set_name)
 
         arrow3 = Arrow(self, wx.ID_ANY)
         sizer.Add(arrow3, pos=(3, 22), flag=wx.LEFT | wx.ALIGN_CENTRE, border=15)
 
         # Stage four, start
         start_button = wx.Button(panel, label="Start", size=(90, 28))
-        sizer.Add(start_button, pos=(3, 23), flag=wx.ALIGN_CENTRE)
+        sizer.Add(start_button, pos=(3, 23))
+
+        files_button.Bind(wx.EVT_BUTTON, self.get_files)
+        self.dir_ctrl.Bind(wx.EVT_DIRPICKER_CHANGED, self.set_dir)
+        self.name_ctrl.Bind(wx.EVT_TEXT, self.set_name)
         start_button.Bind(wx.EVT_BUTTON, self.start_transcode)
 
         panel.SetSizerAndFit(sizer)
+
+        self.Centre()
+
+        self.vlc_path = find_vlc()
 
     def on_open(self):
         with wx.FileDialog(self, style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE) as fileDialog:
@@ -88,22 +102,24 @@ class MainWindow(wx.Frame):
 
             filenames = fileDialog.GetFilenames()
             directory = fileDialog.GetDirectory()
+            paths = fileDialog.GetPaths()
 
-        return filenames, directory
+        return filenames, directory, paths
 
     def get_files(self, event):
-        files_string = ''
-        i = 0
+        # get files and paths
+        selected_files = self.on_open()
+        if not selected_files:
+            return
 
-        # get files and working dir
-        files_list, files_dir = self.on_open()
-        while i < len(files_list):
-            files_string = f'{files_string} \"{files_list[i]}\"'
-            i += 1
+        files_list, files_dir, files_path = selected_files
 
-        self.working_dir = files_dir
-        self.files = files_string
-        self.files_ctrl.SetValue(self.files)
+        files_string = '; '.join(file for file in files_list)
+
+        file_paths_string = ' '.join(['"{}"'.format(path) for path in files_path])
+
+        self.files = file_paths_string
+        self.files_ctrl.SetValue(files_string)
 
         # set auto fill output dir
         self.dir_ctrl.SetPath(files_dir)
@@ -121,26 +137,28 @@ class MainWindow(wx.Frame):
     def set_name(self, event):
         self.file_name = event.GetString()
 
-    def start_transcode(self, event):
+    def start_transcode(self, _):
         destination = f"\"\'{self.output_dir}\\{self.file_name}.mp3\'\""
         # Triple quotes are required. outer is for python, middle is for windows command line, inner is for VLC
 
-        command = r'C:\Program Files\VideoLAN\VLC\vlc.exe'
-        options = fr'--no-sout-video --sout-audio --sout-keep --sout=#gather:transcode{{acodec=mp3,ab=128,channels=2,\
-                    samplerate=44100}}:standard{{access=file,mux=dummy,dst={destination}}}'
+        command = fr'{self.vlc_path} --qt-start-minimized'    # flags to start VLC in tray/minimised
 
-        if self.files and self.working_dir and self.output_dir and self.file_name:
+        options = f'--no-sout-video --sout-audio --sout-keep --sout=#gather:transcode{{acodec=mp3,ab=128,channels=2,' \
+                  f'samplerate=44100}}:standard{{access=file,mux=dummy,dst={destination}}} vlc://quit'
+
+        if self.files and self.output_dir and self.file_name:
             command_options = f'{command} {self.files} {options}'
 
             print('Final Command:')
             print(command_options)
 
-            subprocess.run(command_options, cwd=self.working_dir)
+            subprocess.Popen(command_options)
 
 
 def main():
     app = wx.App(False)
-    frame = MainWindow(None, title='VLC Audio Extractor', size=(1200, 200))
+    frame = MainWindow(None, title='VLC Audio Extraction', size=(1200, 200))
+    frame.Show()
     app.MainLoop()
 
 
