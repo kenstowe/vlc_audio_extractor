@@ -3,20 +3,6 @@ import subprocess
 import wx
 
 
-def find_vlc():
-    pf_dir = os.environ["ProgramFiles"]  # The Program File directory (64bit)
-    pf86_dir = os.environ["ProgramFiles(x86)"]  # The Program File directory (32bit)
-    vlc_root = r'\VideoLAN\VLC\vlc.exe'
-
-    if os.path.exists(f'{pf_dir}{vlc_root}'):
-        return f'{pf_dir}{vlc_root}'
-    elif os.path.exists(f'{pf86_dir}{vlc_root}'):
-        return f'{pf86_dir}{vlc_root}'
-    else:
-        print("VLC not found")
-        # TODO: setup a file picker to get user input for the location of the vlc.exe
-
-
 class Arrow(wx.Panel):
     def __init__(self, *args, **kwargs):
         wx.Panel.__init__(self, *args, **kwargs, size=(110, 20))
@@ -93,7 +79,50 @@ class MainWindow(wx.Frame):
 
         self.Centre()
 
-        self.vlc_path = find_vlc()
+        self.vlc_path = self.find_vlc()
+
+    def ask_user_for_vlc(self, vlc_loc_file):
+        yes_no = wx.MessageDialog(None, 'VLC not found.\n\nWould you like to select the file location?',
+                                  'VLC Audio Extractor', wx.YES_NO | wx.ICON_ERROR | wx.STAY_ON_TOP)
+
+        answer = yes_no.ShowModal()
+
+        if answer == wx.ID_YES:
+            with wx.FileDialog(self, style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fileDialog:
+                if fileDialog.ShowModal() == wx.ID_CANCEL:
+                    return  # the user changed their mind
+
+                vlc_loc = fileDialog.GetPath()
+
+                with open(vlc_loc_file, 'w') as f:
+                    f.write(str(vlc_loc))
+
+            return vlc_loc
+        else:
+            self.Close()
+
+        yes_no.Destroy()
+
+    def find_vlc(self):
+        pf_dir = os.environ["ProgramFiles"]  # The Program File directory (64bit)
+        pf86_dir = os.environ["ProgramFiles(x86)"]  # The Program File directory (32bit)
+        vlc_root = r'\VideoLAN\VLC\vlc.exe'
+        vlc_loc_file = r'vlc_location.txt'
+
+        if os.path.exists(f'{pf_dir}{vlc_root}'):
+            return f'{pf_dir}{vlc_root}'
+        elif os.path.exists(f'{pf86_dir}{vlc_root}'):
+            return f'{pf86_dir}{vlc_root}'
+        elif os.path.exists(vlc_loc_file):
+            with open(vlc_loc_file, 'r') as f:
+                vlc_loc = f.readline().encode('unicode-escape').decode()
+
+                if os.path.exists(vlc_loc):
+                    return vlc_loc
+                else:
+                    return self.ask_user_for_vlc(vlc_loc_file)
+        else:
+            return self.ask_user_for_vlc(vlc_loc_file)
 
     def on_open(self):
         with wx.FileDialog(self, style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE) as fileDialog:
@@ -169,3 +198,5 @@ if __name__ == "__main__":
 # TODO: Find out if VLC can run as background task with status shown in wxpython window
 
 # TODO: Add in support for choosing 1 or multiple directories for source
+
+# TODO: Add drag and drop support for file select
